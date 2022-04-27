@@ -23,7 +23,12 @@ router.put("/:id", verifyTokenAndAdmin, async (req, res) => {
     const updatedMovie = await Movie.findByIdAndUpdate(
       req.params.id,
       {
-        $set: req.body,
+        $set: {
+          user_name: req.body.user_name,
+          password: req.body.password,
+          isUser: req.body.isUser,
+
+        },
       },
       {
         new: true,
@@ -47,29 +52,99 @@ router.delete("/:id", verifyTokenAndAdmin, async (req, res) => {
 });
 
 // search by name
-
 router.get("/search", async (req, res) => {
+  // query
   const qSearch = new RegExp(req.query.q.replace("+", " "), "i");
-  console.log(qSearch);
-  if (qSearch) {
-    try {
-      let movie = await Movie.find({
-        $or: [
-          {
-            name_vi: qSearch,
-          },
-          {
-            name_en: qSearch,
-          },
-        ],
-      }).sort({ movie_name: -1, date: -1 });
-      res.status(200).json(movie);
-    } catch (err) {
-      res.status(500).json(err);
+
+  // partion
+  let perPage = 16;
+  let page = req.query.page || 1;
+  try {
+    await Movie.aggregate([{
+$match:{
+  $or:[
+    {
+      name_vi:qSearch
+    },
+    {
+      name_en:qSearch
     }
+  ]
+}
+    },
+      {
+        $project: {
+          language: 0,
+          ticket_price: 0,
+          date: 0,
+          description: 0,
+          singer_actor_id: 0,
+        },
+      },
+    ])
+      .skip(perPage * page - perPage)
+      .limit(perPage)
+      .exec((error, movie) => {
+        Movie.countDocuments((error, count) => {
+          if (error) return res.status(401).json(error);
+          res.header({
+            "Page-size": Math.ceil(count / perPage),
+            Current: page,
+          });
+          res.status(200).json(movie);
+        });
+      });
+  } catch (error) {
+    res.status(500).json(error);
   }
 });
+// search by name <search bar>
+router.get("/searchbar", async (req, res) => {
+  // query
+  const qSearch = new RegExp(req.query.q.replace("+", " "), "i");
 
+  // partion
+  let perPage = 16;
+  let page = req.query.page || 1;
+  try {
+    await Movie.aggregate([{
+$match:{
+  $or:[
+    {
+      name_vi:qSearch
+    },
+    {
+      name_en:qSearch
+    }
+  ]
+}
+    },
+      {
+        $project: {
+          language: 0,
+          ticket_price: 0,
+          date: 0,
+          description: 0,
+          singer_actor_id: 0,
+        },
+      },
+    ]).sort({name_vi:-1}).limit(5)
+      .skip(perPage * page - perPage)
+      .limit(perPage)
+      .exec((error, movie) => {
+        Movie.countDocuments((error, count) => {
+          if (error) return res.status(401).json(error);
+          res.header({
+            "Page-size": Math.ceil(count / perPage),
+            Current: page,
+          });
+          res.status(200).json(movie);
+        });
+      });
+  } catch (error) {
+    res.status(500).json(error);
+  }
+});
 // get a movie
 
 router.get("/find/:id", async (req, res) => {
@@ -106,7 +181,7 @@ router.get("/all", async (req, res) => {
 
           res.header({
             "Page-size": Math.ceil(count / perPage),
-            "Current": page,
+            Current: page,
           });
           res.status(200).json(movie);
         });
@@ -116,40 +191,50 @@ router.get("/all", async (req, res) => {
   }
 });
 
-// filter
-router.get("/filter", async (req, res) => {
-  const filter = req.query;
-  const movie = await Movie.find();
 
+
+// filter v3
+router.get("/filterv3", async (req, res) => {
+  // query
+  const queryCond = {};
+  if (req.query.city) queryCond.city = new RegExp( req.query.city.replace("+", " "),"i");
+  if (req.query.state) queryCond.state = new RegExp( req.query.state.replace("+", " "),"i");
+  if (req.query.year) queryCond.year = Number(req.query.year);
+  if (req.query.genre) queryCond.genre = new RegExp( req.query.genre.replace("+", " "),"i");
+  console.log(queryCond);
+  // partion
+  let perPage = 16;
+  let page = req.query.page || 1;
   try {
-    const list = movie.filter(function (item) {
-      for (var key in filter) {
-        if (item[key] === undefined || item[key] != filter[key]) return false;
-      }
-      return true;
-    });
-    res.status(200).json(list);
+    await Movie.aggregate([
+      {
+        $match: queryCond
+      },
+      {
+        $project: {
+          language: 0,
+          ticket_price: 0,
+          date: 0,
+          description: 0,
+          singer_actor_id: 0,
+        },
+      },
+    ])
+      .skip(perPage * page - perPage)
+      .limit(perPage)
+      .exec((error, movie) => {
+        Movie.countDocuments((error, count) => {
+          if (error) return res.status(401).json(error);
+
+          res.header({
+            "Page-size": Math.ceil(count / perPage),
+            Current: page,
+          });
+          res.status(200).json(movie);
+        });
+      });
   } catch (error) {
     res.status(500).json(error);
   }
 });
-
-// filter v2
-router.get("/filterv2", async (req, res)=>{
-  const queryCond={}
-  if(req.query.city)
-    queryCond.city=req.query.city.replace("+"," ")
-  if(req.query.state)
-    queryCond.state=req.query.state.replace("+", " ")
-    if(req.query.year)
-      queryCond.year=req.query.year
-    if(req.query.genre)
-      queryCond.genre=req.query.genre
-  try {
-    const movie = await Movie.find(queryCond)
-    res.status(200).json(movie)
-  } catch (error) {
-    res.status(500).json(error)
-  }
-})
 module.exports = router;

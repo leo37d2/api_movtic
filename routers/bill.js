@@ -17,7 +17,7 @@ router.post("/", verifyToken, async (req, res) => {
     seat: req.body.seat,
     food_id: req.body.food_id,
     food_quantity: req.body.food_quantity,
-    total: req.body.price*req.body.ticket_quantity
+    total: req.body.price * req.body.ticket_quantity,
   });
   try {
     const savedBill = await newBill.save();
@@ -76,35 +76,33 @@ router.delete("/:id", verifyTokenAndAdmin, async (req, res) => {
 
 // GET MONTHLY INCOME
 
-router.get("/income", verifyTokenAndAdmin, async (req, res) => {
-  
-  const lastMonth = new Date();
-  const previousMonth = new Date(new Date().setMonth(lastMonth.getMonth() - 1));
-  console.log(previousMonth)
-  console.log(req.query.type)
+router.get("/income", async (req, res) => {
+  const qMonth = Number(req.query.month);
+  const qYear = Number(req.query.year);
   try {
-    const income = await Bill.aggregate(
-      [
-        {
-          $match: {
-            createdAt: { $gte: previousMonth },
-            type:req.query.type
-          },
+    const income = await Bill.aggregate([
+      {
+        $project: {
+          month: { $month: "$createdAt" },
+          year: { $year: "$createdAt" },
+          sales: "$total",
+          type:"$type"
         },
-        {
-          $project: {
-            month: { $month: "$createdAt" },
-            sales: "$total",
-          },
+      },
+      {
+        $match: {
+          month:qMonth,
+          year:qYear,
+          type: req.query.type,
         },
-        {
-          $group: {
-            _id: "$month",
-            totals: { $sum: "$sales" },
-          },
+      },
+      {
+        $group: {
+          _id: "$month",
+          totals: { $sum: "$sales" },
         },
-      ]);
-    console.log(income)
+      },
+    ]);
     res.status(200).json(income);
   } catch (err) {
     res.status(500).json(err);

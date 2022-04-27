@@ -27,7 +27,7 @@ router.get("/", verifyTokenAndAdmin, async (req, res) => {
 });
 
 // search a user by phone or email
-router.get("/search", async (req, res) => {
+router.get("/search", verifyTokenAndAdmin,async (req, res) => {
   const qSearch = new RegExp(req.query.q, "i");
   try {
     let user = await User.find({
